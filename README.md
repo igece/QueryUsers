@@ -1,2 +1,2 @@
-# QueryUsers
-Obtain users list from an Active Directory or Exchange Server.
+# QueryAddressBook
+Obtain a filtered contacts list from Microsoft Outlook address book.
