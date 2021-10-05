@@ -1,11 +1,15 @@
 ﻿using System;
+using System.Diagnostics;
+using System.DirectoryServices;
+using System.IO;
+using System.Reflection;
 using System.Xml;
 
 using DocumentFormat.OpenXml.Spreadsheet;
 
-using Microsoft.Office.Interop.Outlook;
-
 using SpreadsheetLight;
+
+using Exception = System.Exception;
 
 
 namespace QueryAddressBook
@@ -14,72 +18,122 @@ namespace QueryAddressBook
   {
     static void Main(string[] args)
     {
-      var searchConditions = ReadSearchConditions("QueryAddressBook.xml");
+      SLDocument excelDoc = null;
 
-      var app = new Application();
-      var addressList = app.Session.GetGlobalAddressList();
-
-      if (addressList == null)
+      Console.CancelKeyPress += (sender, eventArgs) =>
       {
-        Console.Error.WriteLine("ERROR: Unable to obtain address list. Is Outlook installed?");
-        return;
-      }
-
-      using var excelDoc = new SLDocument();
-      excelDoc.SetCellValue("A1", "Last Name");
-      excelDoc.SetCellValue("B1", "First Name");
-      excelDoc.SetCellValue("C1", "Position");
-      excelDoc.SetCellValue("D1", "Business Phone");
-      excelDoc.SetCellValue("E1", "Mobile Phone");
-      excelDoc.SetCellValue("F1", "E-mail");
-      excelDoc.SetCellValue("G1", "Office Location");
-      excelDoc.SetCellValue("H1", "Department");
-      excelDoc.SetCellValue("I1", "Company Name");
-      excelDoc.SetCellValue("J1", "City");
-      excelDoc.SetCellValue("K1", "State or Province");
-
-      int currentRow = 2;
-      int currentEntry = 0;
-      int totalEntries = addressList.AddressEntries.Count;
-
-      foreach (AddressEntry addressEntry in addressList.AddressEntries)
-      {
-        if (addressEntry.AddressEntryUserType == OlAddressEntryUserType.olExchangeUserAddressEntry ||
-            addressEntry.AddressEntryUserType == OlAddressEntryUserType.olExchangeRemoteUserAddressEntry)
+        if (excelDoc != null)
         {
-          var exchangeUser = addressEntry.GetExchangeUser();
+          var headerStyle = excelDoc.CreateStyle();
+          headerStyle.SetFontBold(true);
+          headerStyle.SetFontColor(System.Drawing.Color.White);
+          headerStyle.SetPatternFill(PatternValues.Solid, System.Drawing.Color.FromArgb(0, 112, 173), System.Drawing.Color.FromArgb(0, 112, 173));
 
-          if (searchConditions.IsMatch(exchangeUser))
-          {
-            excelDoc.SetCellValue(currentRow, 1, exchangeUser.LastName);
-            excelDoc.SetCellValue(currentRow, 2, exchangeUser.FirstName);
-            excelDoc.SetCellValue(currentRow, 3, exchangeUser.JobTitle);
-            excelDoc.SetCellValue(currentRow, 4, exchangeUser.BusinessTelephoneNumber);
-            excelDoc.SetCellValue(currentRow, 5, exchangeUser.MobileTelephoneNumber);
-            excelDoc.SetCellValue(currentRow, 6, exchangeUser.PrimarySmtpAddress);
-            excelDoc.SetCellValue(currentRow, 7, exchangeUser.OfficeLocation);
-            excelDoc.SetCellValue(currentRow, 8, exchangeUser.Department);
-            excelDoc.SetCellValue(currentRow, 9, exchangeUser.CompanyName);
-            excelDoc.SetCellValue(currentRow, 10, exchangeUser.City);
-            excelDoc.SetCellValue(currentRow, 11, exchangeUser.StateOrProvince);
-            currentRow++;
-          }
+          excelDoc.SetRowStyle(1, headerStyle);
+          excelDoc.Filter("A1", "K1");
+          excelDoc.FreezePanes(1, 0);
+          excelDoc.AutoFitColumn("A1", "K1");
 
-          Console.Write($"{(double)currentEntry++ / totalEntries * 100:F02}% completed\r");
+          var outputFile = $"Addressbook_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
+
+          excelDoc.SaveAs(outputFile);
         }
+
+        eventArgs.Cancel = true;
+      };
+
+
+      try
+      {
+        var searchConditions = ReadSearchConditions("QueryUsers.xml");
+
+        using (var searcher = new DirectorySearcher() { PageSize = 1000 })
+        {
+          searcher.Filter = "(&(objectClass=user)(objectCategory=person))";
+          searcher.PropertiesToLoad.Add("givenName");
+          searcher.PropertiesToLoad.Add("sn");
+          searcher.PropertiesToLoad.Add("title");
+          searcher.PropertiesToLoad.Add("mail");
+          searcher.PropertiesToLoad.Add("l");
+          searcher.PropertiesToLoad.Add("St");
+          searcher.PropertiesToLoad.Add("co");
+          searcher.PropertiesToLoad.Add("company");
+          searcher.PropertiesToLoad.Add("department");
+          searcher.PropertiesToLoad.Add("telephoneNumber");
+          searcher.PropertiesToLoad.Add("Mobile");
+          searcher.PropertiesToLoad.Add("physicalDeliveryOfficeName");
+
+          using (var results = searcher.FindAll())
+          {
+            excelDoc = new SLDocument();
+            excelDoc.SetCellValue("A1", "Name");
+            excelDoc.SetCellValue("B1", "Position");
+            excelDoc.SetCellValue("C1", "Business Phone");
+            excelDoc.SetCellValue("D1", "Mobile Phone");
+            excelDoc.SetCellValue("E1", "E-mail");
+            excelDoc.SetCellValue("F1", "Office Location");
+            excelDoc.SetCellValue("G1", "Department");
+            excelDoc.SetCellValue("H1", "Company Name");
+            excelDoc.SetCellValue("I1", "City");
+            excelDoc.SetCellValue("J1", "State or Province");
+            excelDoc.SetCellValue("K1", "Country or Region");
+
+            int currentRow = 2;
+
+            Console.WriteLine($"Extracting all entries matching the following criteria:");
+            Console.WriteLine($"{searchConditions}\n");
+
+            foreach (SearchResult result in results)
+            {
+              if (searchConditions.IsMatch(result))
+              {
+                excelDoc.SetCellValue(currentRow, 1, result.GetLastAndFirstNames());
+                excelDoc.SetCellValue(currentRow, 2, result.GetProperty("title"));
+                excelDoc.SetCellValue(currentRow, 3, result.GetProperty("telephoneNumber"));
+                excelDoc.SetCellValue(currentRow, 4, result.GetProperty("Mobile"));
+                excelDoc.SetCellValue(currentRow, 5, result.GetProperty("mail"));
+                excelDoc.SetCellValue(currentRow, 6, result.GetProperty("physicalDeliveryOfficeName"));
+                excelDoc.SetCellValue(currentRow, 7, result.GetProperty("department"));
+                excelDoc.SetCellValue(currentRow, 8, result.GetProperty("company"));
+                excelDoc.SetCellValue(currentRow, 9, result.GetProperty("l"));
+                excelDoc.SetCellValue(currentRow, 10, result.GetProperty("St"));
+                excelDoc.SetCellValue(currentRow, 11, result.GetProperty("co"));
+
+                currentRow++;
+              }
+
+              Console.Write($"{currentRow - 2} matching entries found\r");
+            }
+          }
+        }
+
+        var headerStyle = excelDoc.CreateStyle();
+        headerStyle.SetFontBold(true);
+        headerStyle.SetFontColor(System.Drawing.Color.White);
+        headerStyle.SetPatternFill(PatternValues.Solid, System.Drawing.Color.FromArgb(0, 112, 173), System.Drawing.Color.FromArgb(0, 112, 173));
+
+        excelDoc.SetRowStyle(1, headerStyle);
+        excelDoc.Filter("A1", "K1");
+        excelDoc.FreezePanes(1, 0);
+        excelDoc.AutoFitColumn("A1", "K1");
+
+        var outputFile = $"Addressbook_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
+
+        excelDoc.SaveAs(outputFile);
+
+        Process.Start(new ProcessStartInfo("cmd", $"/c start {Path.GetDirectoryName(Assembly.GetEntryAssembly().Location)}\\{outputFile}"));
       }
 
-      var headerStyle = excelDoc.CreateStyle();
-      headerStyle.SetFontBold(true);
-      headerStyle.SetFontColor(System.Drawing.Color.White);
-      headerStyle.SetPatternFill(PatternValues.Solid, System.Drawing.Color.FromArgb(0, 112, 173), System.Drawing.Color.FromArgb(0, 112, 173));
+      catch (Exception ex)
+      {
+        Console.Error.WriteLine($"ERROR: {ex.Message}");
+      }
+    }
 
-      excelDoc.AutoFitColumn("A1", "K1");
-      excelDoc.SetRowStyle(1, headerStyle);
-      excelDoc.Filter("A1", "K1");
-      excelDoc.FreezePanes(1, 0);
 
-      excelDoc.SaveAs($"Addressbook_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx");
+    private static void Console_CancelKeyPress(object sender, ConsoleCancelEventArgs e)
+    {
+      throw new NotImplementedException();
     }
 
 
@@ -120,7 +174,37 @@ namespace QueryAddressBook
           searchConditions.CityMatchMode = matchMode;
       }
 
-      return searchConditions; 
+      var departmentNode = dbFile.SelectSingleNode("//SearchConditions/Department");
+
+      if ((departmentNode != null) && departmentNode.NodeType == XmlNodeType.Element)
+      {
+        searchConditions.Department = departmentNode.InnerText;
+
+        if (Enum.TryParse((departmentNode as XmlElement).GetAttribute("matchMode"), out MatchMode matchMode))
+          searchConditions.DepartmentMatchMode = matchMode;
+      }
+
+      var stateOrProvinceNode = dbFile.SelectSingleNode("//SearchConditions/StateOrProvince");
+
+      if ((stateOrProvinceNode != null) && stateOrProvinceNode.NodeType == XmlNodeType.Element)
+      {
+        searchConditions.StateOrProvince = stateOrProvinceNode.InnerText;
+
+        if (Enum.TryParse((stateOrProvinceNode as XmlElement).GetAttribute("matchMode"), out MatchMode matchMode))
+          searchConditions.StateOrProvinceMatchMode = matchMode;
+      }
+
+      var countryOrRegionNode = dbFile.SelectSingleNode("//SearchConditions/CountryOrRegion");
+
+      if ((countryOrRegionNode != null) && countryOrRegionNode.NodeType == XmlNodeType.Element)
+      {
+        searchConditions.CountryOrRegion = countryOrRegionNode.InnerText;
+
+        if (Enum.TryParse((countryOrRegionNode as XmlElement).GetAttribute("matchMode"), out MatchMode matchMode))
+          searchConditions.CountryOrRegionMatchMode = matchMode;
+      }
+
+      return searchConditions;
     }
   }
 }

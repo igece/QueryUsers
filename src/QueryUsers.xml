@@ -1,0 +1,15 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<SearchConditions>
+  <!-- <LastName matchMode="IsEqual"></LastName> -->
+  <!-- <FirstName matchMode="IsEqual"></FirstName> -->
+  <!-- <JobTitle matchMode="IsEqual"></JobTitle> -->
+  <!-- <BusinessTelephoneNumber matchMode="IsEqual"></BusinessTelephoneNumber> -->
+  <!-- <MobileTelephoneNumber matchMode="IsEqual"></MobileTelephoneNumber> -->
+  <!-- <PrimarySmtpAddress matchMode="IsEqual"></PrimarySmtpAddress> -->
+  <!-- <OfficeLocation matchMode="IsEqual"></OfficeLocation> -->
+  <Department matchMode="RegularExpression">OTTLS|OTTLT</Department>
+  <!-- <CompanyName></CompanyName> -->
+  <!-- <City matchMode="RegularExpression">Madrid|Barcelona|Sevilla|Cadiz|Vitoria|Getafe</City>-->
+  <!-- <StateOrProvince matchMode="IsEqual">SPAIN</StateOrProvince> -->
+  <CountryOrRegion matchMode="IsEqual">Spain</CountryOrRegion>
+</SearchConditions>

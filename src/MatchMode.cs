@@ -1,10 +1,19 @@
-﻿namespace QueryAddressBook
+﻿using System.ComponentModel;
+
+namespace QueryAddressBook
 {
   enum MatchMode
   {
+    [Description("be equal to")]
     IsEqual,
+    
+    [Description("start with")]
     StartsWith,
+
+    [Description("contain")]
     Contains,
-    Regexp
+
+    [Description("match regular expression")]
+    RegularExpression
   }
 }
